@@ -1,0 +1,207 @@
+#!/usr/bin/python
+
+import sys
+import os
+import MySQLdb
+import optparse
+import getpass
+import csv
+import json
+import pprint
+
+
+class Index:
+    """Information on an individual index in a MySQL database.
+    """
+    def __init__(self, tbl_name, idx_name, idx_type, non_unique, columns=None):
+        self.tbl_name = tbl_name
+        self.idx_name = idx_name
+        self.idx_type = idx_type
+        self.non_unique = non_unique
+        if not columns:
+            self.columns = []
+        else:
+            self.columns = columns
+
+    def add_col(self, col_name, sub_part):
+        self.columns.append([col_name, sub_part])
+
+    def fmt_cols(self):
+        cols = []
+        for col in self.columns:
+            name, sub_part = col
+            if sub_part:
+                cols.append('`%s`(%s)' % (name, sub_part))
+            else:
+                cols.append('`%s`' % (name))
+
+        return(','.join(cols))
+
+    def fmt_drop(self):
+        qry = '''DROP INDEX `%s` ON `%s`;''' % (self.idx_name, self.tbl_name)
+        return(qry)
+
+    def fmt_create(self):
+        data = {
+            'tbl_name': self.tbl_name,
+            'idx_name': self.idx_name,
+            'idx_type': self.idx_type,
+            'unique': 'UNIQUE',
+            'cols': self.fmt_cols(),
+        }
+        if self.non_unique:
+            data['unique'] = ''
+
+        if self.idx_name == 'PRIMARY':
+            qry = '''ALTER TABLE `%(tbl_name)s` ''' \
+                  '''ADD PRIMARY KEY (%(cols)s);''' % data
+        else:
+            qry = '''CREATE %(unique)s INDEX `%(idx_name)s` ''' \
+                  '''USING %(idx_type)s ''' \
+                  '''ON `%(tbl_name)s` ''' \
+                  '''(%(cols)s);''' % data
+        return(qry)
+
+    def __repr__(self):
+        return("<%s %s.%s (%s) %s>" % (self.__class__.__name__,
+                                       self.tbl_name,
+                                       self.idx_name,
+                                       self.fmt_cols(),
+                                       self.idx_type)
+        )
+
+
+class Indexr:
+    """Retrieve information on indexes from a MySQL database.
+    """
+    def __init__(self, host, user, passwd, dbname, port=3306):
+        self.dbname = dbname
+        self.db = MySQLdb.connect(host=host,
+                                  user=user,
+                                  passwd=passwd,
+                                  db=dbname,
+                                  port=port)
+
+    def get_table_names(self):
+        """Return a list of table in the database"""
+        qry = 'SHOW TABLES'
+        cur = self.db.cursor()
+        cur.execute('SHOW TABLES')
+        tables = [row[0] for row in cur]
+        cur.close()
+        return tables
+
+    def get_index_names(self, table):
+        """Return a list of the names of indexes on the table"""
+        data = {
+            'dbname': self.dbname,
+            'table': table
+        }
+        qry = '''
+            SELECT
+              s.index_name
+            FROM information_schema.statistics AS s
+            JOIN information_schema.columns AS c ON c.table_schema = s.table_schema AND
+                                                    c.table_name = s.table_name AND
+                                                    c.column_name = s.column_name
+            WHERE
+                s.table_schema = '%(dbname)s' AND
+                s.table_name = '%(table)s' AND
+                c.extra NOT LIKE '%%auto_increment%%'
+        ''' % (data)
+        cur = self.db.cursor()
+        cur.execute(qry)
+        index_names = set([row[0] for row in cur])
+        cur.close()
+        return index_names
+
+    def get_index(self, table, idx_name):
+        """Return information about an index"""
+        data = {
+            'dbname': self.dbname,
+            'table': table,
+            'idx_name': idx_name
+        }
+        qry = '''
+            SELECT
+                column_name,
+                seq_in_index,
+                sub_part,
+                index_type,
+                non_unique
+            FROM information_schema.statistics
+            WHERE
+                table_schema = '%(dbname)s' AND
+                table_name = '%(table)s' AND
+                index_name = '%(idx_name)s'
+            ORDER BY index_name, seq_in_index
+            ;
+        ''' % (data)
+        cur = self.db.cursor()
+        cur.execute(qry)
+        index = None
+        for row in cur:
+            column_name, seq_in_index, sub_part, index_type, non_unique = row
+            if not index:
+                index = Index(tbl_name,
+                              idx_name,
+                              index_type,
+                              non_unique)
+            index.add_col(column_name, sub_part)
+        cur.close()
+        return(index)
+
+
+if __name__ == "__main__":
+    description = "Show SQL queries for dropping and recreating indexes. (It does not actually run the queries)\n\n"
+
+    parser = optparse.OptionParser(description=description)
+    parser.set_usage(sys.argv[0] + " [option] <database>")
+
+    parser.add_option("-u", dest="user", action="store", help="Username")
+    parser.add_option("-H", dest="host", action="store", default='localhost', help="Host")
+    parser.add_option("-P", dest="port", action="store", default="3306", help="Port")
+    parser.add_option("-p", dest="ask_passwd", action="store_true", help="Ask for passwd")
+    parser.add_option("--passwd", dest="passwd", action="store", help="Password (use -p to ask)")
+    parser.add_option("--pw-from-stdin", dest="pw_from_stdin", action="store_true", help="Read password from STDIN")
+    parser.add_option("-t", "--tables", dest="tables", action="store", help="Comma-separated list of tables to process")
+    parser.add_option("--primary", dest="primary", action="store_true", help="Also process primary keys")
+
+    (options, args) = parser.parse_args()
+
+    if not args:
+        parser.error("You must specify a database name")
+    if options.tables:
+        options.tables = options.tables.split(',')
+    if not options.user:
+        options.user = os.getlogin()
+    try:
+        options.port = int(options.port)
+    except ValueError, e:
+        parser.error("Invalid port number '%s'" % (options.port))
+    if options.pw_from_stdin:
+        options.passwd = sys.stdin.read().strip()
+    if options.ask_passwd:
+        options.passwd = getpass.getpass()
+    elif not options.passwd:
+        options.passwd = ''
+
+    idx = Indexr(options.host,
+                 options.user,
+                 options.passwd,
+                 args[0],
+                 options.port)
+
+    indexes = [] # Yeah, "indices". I know.
+    for tbl_name in idx.get_table_names():
+        if not options.tables or tbl_name in options.tables:
+            for idx_name in idx.get_index_names(tbl_name):
+                indexes.append(idx.get_index(tbl_name, idx_name))
+
+    for index in indexes:
+        if index.idx_name != 'PRIMARY' or options.primary:
+            sys.stdout.write(index.fmt_drop() + "\n")
+
+    for index in indexes:
+        if index.idx_name != 'PRIMARY' or options.primary:
+            sys.stdout.write(index.fmt_create() + "\n")
