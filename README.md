@@ -42,6 +42,17 @@ Example usage:
     # Recreate the indexes
     $ grep -e "^CREATE" mydb_idx.sql | mysql -u root -p mydb
 
+This is what the output of my_indexr looks like:
+
+    DROP INDEX `location` ON `idx_tst_innodb_basic`;
+    DROP INDEX `name_age` ON `idx_tst_innodb_basic`;
+    DROP INDEX `email` ON `idx_tst_innodb_basic`;
+    DROP INDEX `PRIMARY` ON `idx_tst_innodb_compkey`;
+    CREATE  INDEX `location` USING BTREE ON `idx_tst_innodb_basic` (`location_id`);
+    CREATE  INDEX `name_age` USING BTREE ON `idx_tst_innodb_basic` (`name`(40),`age`);
+    CREATE UNIQUE INDEX `email` USING BTREE ON `idx_tst_innodb_basic` (`email`);
+    ALTER TABLE `idx_tst_innodb_compkey` ADD PRIMARY KEY (`last_name`,`first_name`);
+
 
 License
 -------
