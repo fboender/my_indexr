@@ -7,6 +7,17 @@ About
 my_indexr is a tool that outputs SQL commands for dropping and recreating
 indexes on MySQL databases / tables.
 
+Features include:
+  - Process only certain tables
+  - Process non-primary or both normal and primary indexes
+  - Correctly handles:
+    * Primary key indexes
+    * Compound key / multi-column indexes
+    * Index types (BTREE, etc)
+    * Prefix lengths
+    * Auto_increment columns, which MUST be a key (my_indexr skips indexes with these columns in them)
+
+
 Usage
 -----
 
@@ -15,9 +26,7 @@ From the `--help`:
     Usage: ./my_indexr [option] <database>
     
     Show SQL queries for dropping and recreating indexes. (It does not actually
-    run the queries)  Example:    $ ./indexr.py -u root -p mydb > mydb_idx.sql
-    $ grep -e "^DROP" mydb_idx.sql | mysql -u root -p mydb    $ grep -e "^CREATE"
-    mydb_idx.sql | mysql -u root -p mydb
+    run the queries)
     
     Options:
       -h, --help            show this help message and exit
@@ -52,6 +61,13 @@ This is what the output of my_indexr looks like:
     CREATE  INDEX `name_age` USING BTREE ON `idx_tst_innodb_basic` (`name`(40),`age`);
     CREATE UNIQUE INDEX `email` USING BTREE ON `idx_tst_innodb_basic` (`email`);
     ALTER TABLE `idx_tst_innodb_compkey` ADD PRIMARY KEY (`last_name`,`first_name`);
+
+
+Bugs
+----
+
+There may still be edge-cases which are not handled properly. If you encounter
+such an edge-case, please notify me. Include a schema-dump (--no-data please).
 
 
 License
