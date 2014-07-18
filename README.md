@@ -8,9 +8,10 @@ my_indexr is a tool that outputs SQL commands for dropping and recreating
 indexes on MySQL databases / tables.
 
 Features include:
-  - Process only certain tables
-  - Process non-primary or both normal and primary indexes
-  - Correctly handles:
+
+- Process only certain tables
+- Process non-primary or both normal and primary indexes
+- Correctly handles:
     * Primary key indexes
     * Compound key / multi-column indexes
     * Index types (BTREE, etc)
