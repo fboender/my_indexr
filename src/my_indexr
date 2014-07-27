@@ -143,7 +143,7 @@ class Indexr:
         for row in cur:
             column_name, seq_in_index, sub_part, index_type, non_unique = row
             if not index:
-                index = Index(tbl_name,
+                index = Index(table,
                               idx_name,
                               index_type,
                               non_unique)
