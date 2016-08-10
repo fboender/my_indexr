@@ -80,7 +80,6 @@ class Indexr:
 
     def get_table_names(self):
         """Return a list of table in the database"""
-        qry = 'SHOW TABLES'
         cur = self.db.cursor()
         cur.execute('SHOW TABLES')
         tables = [row[0] for row in cur]
