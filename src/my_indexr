@@ -5,9 +5,6 @@ import os
 import MySQLdb
 import optparse
 import getpass
-import csv
-import json
-import pprint
 
 
 class Index:
