@@ -64,8 +64,7 @@ class Index:
                                        self.tbl_name,
                                        self.idx_name,
                                        self.fmt_cols(),
-                                       self.idx_type)
-        )
+                                       self.idx_type))
 
 
 class Indexr:
